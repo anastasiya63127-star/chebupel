@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Личный Чат 1-на-1</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase Realtime Database CDN -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, push, onValue, off, onDisconnect, serverTimestamp, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            databaseURL: "https://private-chat-app-default-rtdb.firebaseio.com"
+        };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = getDatabase(app);
+            window.firebaseDb = db;
+            window.fbRef = ref;
+            window.fbSet = set;
+            window.fbPush = push;
+            window.fbOnValue = onValue;
+            window.fbOff = off;
+            window.fbOnDisconnect = onDisconnect;
+            window.fbServerTimestamp = serverTimestamp;
+            window.fbRemove = remove;
+            window.firebaseReady = true;
+        } catch (e) {
+            window.firebaseReady = false;
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .app-height {
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        .chat-scroll::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        .chat-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.25);
+            border-radius: 4px;
+        }
+
+        .pulse-recording {
+            animation: recordPulse 1.2s infinite ease-in-out;
+        }
+        @keyframes recordPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.15); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pb-safe {
+            padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+        }
+        .pt-safe {
+            padding-top: max(0.75rem, env(safe-area-inset-top));
+        }
+    </style>
+</head>
+<body class="h-full w-full bg-slate-950 flex flex-col justify-between overflow-hidden antialiased select-none">
+
+    <!-- MAIN CONTAINER -->
+    <div id="app" class="app-height max-w-md md:max-w-xl mx-auto w-full flex flex-col relative bg-slate-900 border-x border-slate-800/80 shadow-2xl">
+        
+        <!-- ==================== MODAL 1: USER PROFILE ==================== -->
+        <div id="profile-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-5">
+                <div class="text-center space-y-2">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-lg text-3xl">
+                        <span id="profile-avatar-preview">👤</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-100 tracking-tight">Ваш профиль</h2>
+                    <p class="text-xs text-slate-400 leading-relaxed">Введите имя, чтобы собеседник видел, кто отправляет сообщения.</p>
+                </div>
+
+                <form id="profile-form" onsubmit="event.preventDefault(); saveUserProfile();" class="space-y-4">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Ваше имя / Никнейм</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                            <input type="text" id="profile-input-name" required placeholder="Например: Аня" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Выберите эмодзи-аватар</label>
+                        <div class="flex justify-between items-center gap-1 bg-slate-950 p-2 border border-slate-800 rounded-xl text-xl">
+                            <button type="button" onclick="selectEmoji('👤')" class="emoji-btn p-1.5 rounded-lg hover:bg-slate-800 transition">👤</button>
+                            <button type="button" onclick="selectEmoji('🦊')" class="emoji-btn p-1.5 rounded-lg hover:bg-slate-800 transition">🦊</button>
+                            <button type="button" onclick="selectEmoji('🐱')" class="emoji-btn p-1.5 rounded-lg hover:bg-slate-800 transition">🐱</button>
+                            <button type="button" onclick="selectEmoji('🚀')" class="emoji-btn p-1.5 rounded-lg hover:bg-slate-800 transition">🚀</button>
+                            <button type="button" onclick="selectEmoji('👑')" class="emoji-btn p-1.5 rounded-lg hover:bg-slate-800 transition">👑</button>
+                            <button type="button" onclick="selectEmoji('👻')" class="emoji-btn p-1.5 rounded-lg hover:bg-slate-800 transition">👻</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center space-x-2 text-sm">
+                        <i class="fa-solid fa-check text-xs"></i>
+                        <span>Сохранить профиль</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ==================== MODAL 2: ROOM LOGIN ==================== -->
+        <div id="room-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-40 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+                <div class="text-center space-y-2">
+                    <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600/20 text-indigo-400 mb-1 border border-indigo-500/30 shadow-lg">
+                        <i class="fa-solid fa-users-viewfinder text-2xl"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-100 tracking-tight">Вход в комнату</h2>
+                    <p class="text-xs text-slate-400 leading-relaxed">Введите одинаковое название комнаты и секретный код на обоих устройствах!</p>
+                </div>
+
+                <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3 flex items-center justify-between">
+                    <div class="flex items-center space-x-2.5">
+                        <span id="active-user-avatar" class="text-xl">👤</span>
+                        <div>
+                            <p class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Вы вошли как</p>
+                            <p id="active-user-name" class="text-xs font-bold text-slate-200">Загрузка...</p>
+                        </div>
+                    </div>
+                    <button onclick="openProfileModal()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium px-2 py-1 rounded-lg bg-indigo-950/50 border border-indigo-800/40 transition">
+                        Изменить
+                    </button>
+                </div>
+
+                <form id="room-form" onsubmit="event.preventDefault(); handleJoinRoom();" class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Имя комнаты</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-hashtag absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                            <input type="text" id="input-room-id" required placeholder="Например: secret123" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Секретный код / Пароль</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-key absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+                            <input type="password" id="input-passcode" required placeholder="Общий секретный код" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                        </div>
+                    </div>
+
+                    <div id="login-error" class="hidden text-red-400 text-xs text-center bg-red-950/40 py-2 px-3 border border-red-900/40 rounded-xl">
+                        Заполните все поля!
+                    </div>
+
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center space-x-2 text-sm">
+                        <span>Войти в чат</span>
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ==================== MODAL 3: CHAT INFO & TABBED MEDIA GALLERY ==================== -->
+        <div id="chat-info-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex flex-col pt-safe">
+            <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-info text-indigo-400 text-lg"></i>
+                    <h3 class="text-base font-bold text-slate-100">Информация о чате</h3>
+                </div>
+                <button onclick="closeChatInfoModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Tab Navigation Bar -->
+            <div class="bg-slate-900/80 border-b border-slate-800 px-2 py-2 flex items-center overflow-x-auto chat-scroll gap-1 text-xs font-medium">
+                <button onclick="switchInfoTab('tab-users')" id="btn-tab-users" class="info-tab-btn active px-3 py-1.5 rounded-xl bg-indigo-600 text-white flex items-center gap-1.5 shrink-0 transition">
+                    <i class="fa-solid fa-users"></i>
+                    <span>Пользователи</span>
+                </button>
+                <button onclick="switchInfoTab('tab-photos')" id="btn-tab-photos" class="info-tab-btn px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1.5 shrink-0 transition">
+                    <i class="fa-solid fa-image"></i>
+                    <span>Фото</span>
+                </button>
+                <button onclick="switchInfoTab('tab-videos')" id="btn-tab-videos" class="info-tab-btn px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1.5 shrink-0 transition">
+                    <i class="fa-solid fa-video"></i>
+                    <span>Видео</span>
+                </button>
+                <button onclick="switchInfoTab('tab-docs')" id="btn-tab-docs" class="info-tab-btn px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1.5 shrink-0 transition">
+                    <i class="fa-solid fa-file-lines"></i>
+                    <span>Документы</span>
+                </button>
+                <button onclick="switchInfoTab('tab-audio')" id="btn-tab-audio" class="info-tab-btn px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1.5 shrink-0 transition">
+                    <i class="fa-solid fa-microphone"></i>
+                    <span>Медиа</span>
+                </button>
+                <button onclick="switchInfoTab('tab-links')" id="btn-tab-links" class="info-tab-btn px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1.5 shrink-0 transition">
+                    <i class="fa-solid fa-link"></i>
+                    <span>Ссылки</span>
+                </button>
+            </div>
+
+            <!-- Tab Content Area -->
+            <div class="flex-1 overflow-y-auto chat-scroll p-4 bg-slate-950">
+                <div id="tab-users" class="info-tab-content space-y-3">
+                    <p class="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2">Участники комнаты</p>
+                    <div id="info-users-list" class="space-y-2"></div>
+                </div>
+
+                <div id="tab-photos" class="info-tab-content hidden">
+                    <div id="info-photos-grid" class="grid grid-cols-3 gap-2"></div>
+                    <p id="empty-photos" class="text-center text-xs text-slate-500 py-8 hidden">Фотографии отсутствуют</p>
+                </div>
+
+                <div id="tab-videos" class="info-tab-content hidden space-y-2">
+                    <div id="info-videos-list" class="space-y-2"></div>
+                    <p id="empty-videos" class="text-center text-xs text-slate-500 py-8 hidden">Видеофайлы отсутствуют</p>
+                </div>
+
+                <div id="tab-docs" class="info-tab-content hidden space-y-2">
+                    <div id="info-docs-list" class="space-y-2"></div>
+                    <p id="empty-docs" class="text-center text-xs text-slate-500 py-8 hidden">Документы отсутствуют</p>
+                </div>
+
+                <div id="tab-audio" class="info-tab-content hidden space-y-2">
+                    <div id="info-audio-list" class="space-y-2"></div>
+                    <p id="empty-audio" class="text-center text-xs text-slate-500 py-8 hidden">Голосовые сообщения отсутствуют</p>
+                </div>
+
+                <div id="tab-links" class="info-tab-content hidden space-y-2">
+                    <div id="info-links-list" class="space-y-2"></div>
+                    <p id="empty-links" class="text-center text-xs text-slate-500 py-8 hidden">Ссылки не найдены</p>
+                </div>
+            </div>
+
+            <div class="p-3 bg-slate-900 border-t border-slate-800 flex justify-center">
+                <button onclick="leaveRoomExplicitly()" class="w-full bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 py-2.5 rounded-xl text-xs font-medium transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Выйти из этой комнаты</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== MODAL 4: SHARE LINK (HTTP / HTTPS) ==================== -->
+        <div id="share-modal" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-mono text-xs font-bold">
+                            http://
+                        </div>
+                        <h3 class="text-base font-bold text-slate-100">Генератор ссылки</h3>
+                    </div>
+                    <button onclick="closeShareModal()" class="text-slate-400 hover:text-white p-1">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    Отправь эту прямую ссылку собеседнику. Комната <span id="share-room-name-badge" class="text-indigo-400 font-semibold"></span> заполнится автоматически!
+                </p>
+
+                <!-- HTTP / HTTPS Links Display -->
+                <div class="space-y-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1">Прямая веб-ссылка подключения:</label>
+                        <div class="relative">
+                            <input type="text" id="share-link-input" readonly class="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-3 pr-20 text-xs font-mono text-slate-300 focus:outline-none select-all">
+                            <button onclick="copyShareLink()" class="absolute right-1 top-1 bottom-1 bg-indigo-600 hover:bg-indigo-500 text-white px-3 rounded-lg text-xs font-medium transition flex items-center gap-1">
+                                <i class="fa-solid fa-copy"></i>
+                                <span>Копия</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="triggerNativeShare()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-2.5 rounded-xl border border-slate-700 transition text-xs flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane text-indigo-400"></i>
+                    <span>Отправить через мессенджеры</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== MODAL 5: FULLSCREEN MEDIA PREVIEW ==================== -->
+        <div id="image-modal" class="hidden absolute inset-0 bg-black/95 backdrop-blur-lg z-50 flex flex-col justify-between p-4">
+            <div class="flex justify-end pt-safe">
+                <button onclick="closeImageModal()" class="w-10 h-10 rounded-full bg-slate-800/80 text-white flex items-center justify-center hover:bg-slate-700 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="flex-1 flex items-center justify-center p-2">
+                <img id="full-modal-image" src="" class="max-h-[80vh] max-w-full rounded-2xl object-contain shadow-2xl">
+            </div>
+            <div class="text-center pb-safe text-slate-400 text-xs">Нажмите X для закрытия</div>
+        </div>
+
+        <!-- ==================== MAIN CHAT HEADER & ACTIVE USERS BAR ==================== -->
+        <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-2.5 flex flex-col z-10 pt-safe">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <div class="relative cursor-pointer" onclick="openProfileModal()" title="Профиль">
+                        <div id="header-avatar" class="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white text-base shadow-md border border-indigo-400/30">
+                            👤
+                        </div>
+                        <span id="status-dot" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+                    </div>
+                    <div class="max-w-[120px] sm:max-w-[180px] truncate">
+                        <h1 id="chat-title" class="text-sm font-semibold text-slate-100 flex items-center gap-1.5 truncate">
+                            Чат
+                        </h1>
+                        <span id="header-user-display" class="text-[11px] text-indigo-300 truncate block font-medium">Гость</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-1">
+                    <button onclick="openChatInfoModal()" title="Информация о чате и медиа" class="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60 bg-slate-800/40 text-xs font-medium transition flex items-center gap-1">
+                        <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                        <span class="hidden sm:inline">Инфо</span>
+                    </button>
+
+                    <!-- HTTP Link Button -->
+                    <button onclick="openShareModal()" title="Получить ссылку http://" class="p-2 rounded-xl text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 transition flex items-center gap-1 text-xs font-medium border border-indigo-500/20 bg-indigo-500/10">
+                        <span class="font-mono font-bold text-[11px]">http://</span>
+                        <span class="hidden sm:inline">Ссылка</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Presence Bar -->
+            <div id="active-users-bar" class="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                <div class="flex items-center space-x-1.5 overflow-x-auto chat-scroll py-0.5">
+                    <span class="text-[10px] uppercase font-bold text-slate-500 tracking-wider mr-1">В сети:</span>
+                    <div id="active-users-list" class="flex items-center space-x-2"></div>
+                </div>
+                <div id="connection-status-badge" class="text-[10px] font-mono text-emerald-400 flex items-center gap-1 shrink-0 pl-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>Онлайн</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ==================== MESSAGES LIST ==================== -->
+        <main id="chat-messages" class="flex-1 overflow-y-auto chat-scroll p-4 space-y-3.5 bg-gradient-to-b from-slate-950/40 to-slate-950/90">
+            <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 space-y-3">
+                <div class="w-16 h-16 rounded-3xl bg-slate-800/50 flex items-center justify-center text-slate-400 text-2xl border border-slate-800">
+                    <i class="fa-solid fa-comments"></i>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-sm font-medium text-slate-300">Сообщений пока нет</p>
+                    <p class="text-xs max-w-xs text-slate-500">Отправьте сообщения, до 10 фотографий, видео или файлов за раз!</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ==================== MULTI-FILE ATTACHMENT PREVIEW PANEL ==================== -->
+        <div id="attachment-preview-container" class="hidden px-3 py-2 bg-slate-800/90 border-t border-slate-700/50 flex flex-col space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] text-slate-300 font-medium flex items-center gap-1.5">
+                    <i class="fa-solid fa-paperclip text-indigo-400"></i>
+                    <span>Выбрано файлов: <strong id="attachment-count-badge" class="text-indigo-400">0</strong> / 10</span>
+                </span>
+                <button onclick="clearAllAttachments()" class="text-[11px] text-slate-400 hover:text-red-400 transition">
+                    Очистить все
+                </button>
+            </div>
+            <div id="attachment-chips-list" class="flex items-center space-x-2 overflow-x-auto chat-scroll py-1"></div>
+        </div>
+
+        <!-- ==================== VOICE RECORDING PANEL ==================== -->
+        <div id="recording-panel" class="hidden px-4 py-3 bg-red-950/30 border-t border-red-900/40 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-3 h-3 rounded-full bg-red-500 pulse-recording"></div>
+                <span class="text-xs font-mono font-bold text-red-300" id="recording-timer">00:00</span>
+                <span class="text-xs text-red-200/70">Запись...</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="cancelVoiceRecording()" class="p-2 text-slate-400 hover:text-red-400 transition">
+                    <i class="fa-solid fa-trash text-sm"></i>
+                </button>
+                <button onclick="stopAndSendVoiceRecording()" class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-medium transition flex items-center gap-1 shadow-md">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Отправить</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== INPUT FOOTER ==================== -->
+        <footer class="bg-slate-900 border-t border-slate-800/80 p-3 pb-safe z-10">
+            <form id="message-form" onsubmit="event.preventDefault(); handleSendMessage();" class="flex items-end space-x-2">
+                <!-- Multiple Files Input Support (max 10) -->
+                <input type="file" id="file-input" multiple accept="image/*,video/*,application/pdf,text/plain,.doc,.docx" class="hidden" onchange="handleMultipleFilesSelected(event)">
+
+                <button type="button" onclick="document.getElementById('file-input').click()" class="p-3 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-2xl transition shrink-0 relative" title="Прикрепить файлы (до 10 шт.)">
+                    <i class="fa-solid fa-paperclip text-lg"></i>
+                    <span id="badge-file-counter" class="hidden absolute top-1 right-1 bg-indigo-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                </button>
+
+                <div class="flex-1 relative">
+                    <textarea id="message-input" rows="1" placeholder="Сообщение..." class="w-full bg-slate-950 border border-slate-800 rounded-2xl py-2.5 px-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition resize-none max-h-24 chat-scroll"></textarea>
+                </div>
+
+                <button type="button" id="btn-voice" onclick="toggleVoiceRecording()" class="p-3 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-2xl transition shrink-0" title="Записать голосовое">
+                    <i class="fa-solid fa-microphone text-lg"></i>
+                </button>
+
+                <button type="submit" id="btn-send" class="p-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-2xl shadow-lg shadow-indigo-600/30 transition shrink-0 flex items-center justify-center">
+                    <i class="fa-solid fa-paper-plane text-base"></i>
+                </button>
+            </form>
+        </footer>
+
+    </div>
+
+    <script>
+        const USER_PROFILE_KEY = 'chat_app_user_profile_v3';
+        const ACTIVE_SESSION_KEY = 'chat_app_active_session_v3';
+
+        let userProfile = { userId: '', name: '', emoji: '👤' };
+        let currentRoomId = "";
+        let currentPasscode = "";
+        let roomStorageKey = "";
+        let roomFirebasePath = "";
+
+        let activeUsersMap = {};
+        let currentMessagesList = [];
+        
+        // Multi-Attachment Array (Up to 10 files)
+        let pendingAttachmentsList = [];
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStartTime = null;
+        let recordingTimerInterval = null;
+        let presenceHeartbeatInterval = null;
+
+        let broadcastChannel = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initUserProfile();
+            checkUrlHashForRoom();
+            attemptAutoLoginSession();
+        });
+
+        function initUserProfile() {
+            try {
+                const storedProfile = localStorage.getItem(USER_PROFILE_KEY);
+                if (storedProfile) userProfile = JSON.parse(storedProfile);
+            } catch (e) {}
+
+            if (!userProfile.userId) {
+                userProfile.userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            if (!userProfile.name) {
+                openProfileModal();
+            } else {
+                updateProfileUI();
+            }
+        }
+
+        function openProfileModal() {
+            document.getElementById('profile-input-name').value = userProfile.name || '';
+            document.getElementById('profile-avatar-preview').textContent = userProfile.emoji || '👤';
+            document.getElementById('profile-modal').classList.remove('hidden');
+        }
+
+        function selectEmoji(emojiChar) {
+            userProfile.emoji = emojiChar;
+            document.getElementById('profile-avatar-preview').textContent = emojiChar;
+        }
+
+        function saveUserProfile() {
+            const nameInput = document.getElementById('profile-input-name').value.trim();
+            if (!nameInput) return;
+
+            userProfile.name = nameInput;
+            try { localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile)); } catch (e) {}
+
+            document.getElementById('profile-modal').classList.add('hidden');
+            updateProfileUI();
+            
+            if (currentRoomId) sendPresencePing();
+        }
+
+        function updateProfileUI() {
+            document.getElementById('header-avatar').textContent = userProfile.emoji || '👤';
+            document.getElementById('header-user-display').textContent = `${userProfile.emoji} ${userProfile.name}`;
+            document.getElementById('active-user-avatar').textContent = userProfile.emoji || '👤';
+            document.getElementById('active-user-name').textContent = userProfile.name || 'Не указано';
+        }
+
+        function checkUrlHashForRoom() {
+            const hashRoom = window.location.hash.replace('#', '').trim();
+            if (hashRoom) {
+                document.getElementById('input-room-id').value = decodeURIComponent(hashRoom);
+            }
+        }
+
+        function attemptAutoLoginSession() {
+            try {
+                const storedSession = localStorage.getItem(ACTIVE_SESSION_KEY);
+                if (storedSession) {
+                    const parsed = JSON.parse(storedSession);
+                    if (parsed.roomId && parsed.passcode && userProfile.name) {
+                        connectToRoom(parsed.roomId, parsed.passcode);
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            if (!currentRoomId) {
+                document.getElementById('room-modal').classList.remove('hidden');
+            }
+        }
+
+        function handleJoinRoom() {
+            const roomId = document.getElementById('input-room-id').value.trim();
+            const passcode = document.getElementById('input-passcode').value.trim();
+
+            if (!roomId || !passcode || !userProfile.name) {
+                document.getElementById('login-error').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('login-error').classList.add('hidden');
+            connectToRoom(roomId, passcode);
+        }
+
+        function connectToRoom(roomId, passcode) {
+            currentRoomId = roomId;
+            currentPasscode = passcode;
+
+            try {
+                localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify({ roomId, passcode }));
+            } catch(e) {}
+
+            window.location.hash = encodeURIComponent(roomId);
+
+            const roomHash = btoa(unescape(encodeURIComponent(roomId + ':::' + passcode))).replace(/[/+=]/g, '_');
+            roomStorageKey = `chat_room_${roomHash}`;
+            roomFirebasePath = `chats/${roomHash}`;
+
+            document.getElementById('chat-title').innerHTML = `<i class="fa-solid fa-lock text-xs text-indigo-400"></i> ${escapeHtml(roomId)}`;
+            document.getElementById('room-modal').classList.add('hidden');
+
+            setupBroadcastChannel();
+            loadLocalMessages();
+            setupRealtimeSubscriptions();
+            startPresenceHeartbeat();
+        }
+
+        function leaveRoomExplicitly() {
+            try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch(e){}
+            currentRoomId = "";
+            currentPasscode = "";
+            closeChatInfoModal();
+            document.getElementById('room-modal').classList.remove('hidden');
+        }
+
+        function setupBroadcastChannel() {
+            try {
+                if (broadcastChannel) broadcastChannel.close();
+                broadcastChannel = new BroadcastChannel(`bc_${roomStorageKey}`);
+                broadcastChannel.onmessage = (event) => {
+                    if (event.data && event.data.type === 'NEW_MSG') {
+                        loadLocalMessages();
+                    }
+                };
+            } catch(e) {}
+        }
+
+        function setupRealtimeSubscriptions() {
+            if (window.firebaseReady && window.firebaseDb) {
+                const messagesRef = window.fbRef(window.firebaseDb, `${roomFirebasePath}/messages`);
+                const presenceRef = window.fbRef(window.firebaseDb, `${roomFirebasePath}/presence`);
+
+                window.fbOnValue(messagesRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        currentMessagesList = Object.values(data).sort((a,b) => a.timestamp - b.timestamp);
+                        try { localStorage.setItem(roomStorageKey, JSON.stringify(currentMessagesList)); } catch(e){}
+                        renderMessages();
+                    }
+                });
+
+                window.fbOnValue(presenceRef, (snapshot) => {
+                    const data = snapshot.val() || {};
+                    activeUsersMap = data;
+                    renderActiveUsersBar();
+                });
+            }
+        }
+
+        function startPresenceHeartbeat() {
+            sendPresencePing();
+            if (presenceHeartbeatInterval) clearInterval(presenceHeartbeatInterval);
+            presenceHeartbeatInterval = setInterval(sendPresencePing, 10000);
+        }
+
+        function sendPresencePing() {
+            if (!currentRoomId || !userProfile.userId) return;
+
+            const userPresenceObj = {
+                userId: userProfile.userId,
+                name: userProfile.name,
+                emoji: userProfile.emoji || '👤',
+                online: true,
+                lastSeen: Date.now()
+            };
+
+            if (window.firebaseReady && window.firebaseDb) {
+                const myPresenceRef = window.fbRef(window.firebaseDb, `${roomFirebasePath}/presence/${userProfile.userId}`);
+                window.fbSet(myPresenceRef, userPresenceObj);
+
+                try {
+                    window.fbOnDisconnect(myPresenceRef).set({
+                        ...userPresenceObj,
+                        online: false,
+                        lastSeen: window.fbServerTimestamp()
+                    });
+                } catch(e){}
+            } else {
+                activeUsersMap[userProfile.userId] = userPresenceObj;
+                renderActiveUsersBar();
+            }
+        }
+
+        function renderActiveUsersBar() {
+            const container = document.getElementById('active-users-list');
+            const now = Date.now();
+            let html = '';
+
+            const activeUsers = Object.values(activeUsersMap).filter(u => u.online && (now - u.lastSeen < 35000));
+
+            if (activeUsers.length === 0) {
+                html = `
+                    <div class="flex items-center space-x-1 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/50">
+                        <span class="text-xs">${userProfile.emoji}</span>
+                        <span class="text-[11px] text-slate-200 font-medium">${escapeHtml(userProfile.name)} (Вы)</span>
+                    </div>
+                `;
+            } else {
+                activeUsers.forEach(u => {
+                    const isSelf = u.userId === userProfile.userId;
+                    html += `
+                        <div class="flex items-center space-x-1 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/50 shrink-0">
+                            <span class="text-xs">${u.emoji || '👤'}</span>
+                            <span class="text-[11px] text-slate-200 font-medium">${escapeHtml(u.name)}${isSelf ? ' (Вы)' : ''}</span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        </div>
+                    `;
+                });
+            }
+
+            container.innerHTML = html;
+        }
+
+        function loadLocalMessages() {
+            try {
+                const stored = localStorage.getItem(roomStorageKey);
+                currentMessagesList = stored ? JSON.parse(stored) : [];
+            } catch(e) {
+                currentMessagesList = [];
+            }
+            renderMessages();
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('chat-messages');
+
+            if (!currentMessagesList || currentMessagesList.length === 0) {
+                container.innerHTML = `
+                    <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 space-y-3">
+                        <div class="w-16 h-16 rounded-3xl bg-slate-800/50 flex items-center justify-center text-slate-400 text-2xl border border-slate-800">
+                            <i class="fa-solid fa-comments"></i>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-sm font-medium text-slate-300">Сообщений пока нет</p>
+                            <p class="text-xs max-w-xs text-slate-500">Отправьте сообщения, до 10 фотографий, видео или файлов за раз!</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            currentMessagesList.forEach((msg) => {
+                const isMe = (msg.userId && msg.userId === userProfile.userId) || (!msg.userId && msg.sender === userProfile.name);
+                const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const emojiAvatar = msg.emoji || '👤';
+
+                html += `
+                    <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1">
+                        <span class="text-[10px] text-slate-400 px-1 font-medium flex items-center gap-1">
+                            <span>${emojiAvatar}</span>
+                            <span>${escapeHtml(msg.sender)}</span>
+                        </span>
+                        <div class="max-w-[85%] sm:max-w-[75%] rounded-2xl px-3.5 py-2.5 shadow-md ${
+                            isMe 
+                            ? 'bg-indigo-600 text-white rounded-br-none' 
+                            : 'bg-slate-800 text-slate-100 rounded-bl-none border border-slate-700/60'
+                        }">
+                `;
+
+                if (msg.text) {
+                    html += `<p class="text-sm whitespace-pre-wrap leading-relaxed break-words">${renderTextWithLinks(msg.text)}</p>`;
+                }
+
+                // Render single or multiple attachments
+                if (msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+                    html += renderAttachmentsBlock(msg.attachments);
+                } else if (msg.attachment) {
+                    html += renderAttachmentsBlock([msg.attachment]);
+                }
+
+                html += `
+                            <div class="text-[9px] ${isMe ? 'text-indigo-200' : 'text-slate-400'} text-right mt-1 font-mono">
+                                ${timeStr}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function renderAttachmentsBlock(attachmentsList) {
+            let blockHtml = '<div class="mt-1 mb-1 space-y-1.5">';
+            attachmentsList.forEach(att => {
+                if (att.type === 'image') {
+                    blockHtml += `
+                        <div class="overflow-hidden rounded-xl border border-indigo-500/20">
+                            <img src="${att.data}" onclick="openImageModal('${att.data}')" class="max-w-full max-h-60 object-cover cursor-pointer hover:opacity-90 transition">
+                        </div>
+                    `;
+                } else if (att.type === 'video') {
+                    blockHtml += `
+                        <div class="rounded-xl overflow-hidden bg-black/40 p-1 border border-slate-700">
+                            <video controls src="${att.data}" class="max-w-full max-h-60 rounded-lg"></video>
+                        </div>
+                    `;
+                } else if (att.type === 'doc') {
+                    blockHtml += `
+                        <a href="${att.data}" download="${att.name || 'document'}" class="p-2.5 bg-slate-900/80 rounded-xl border border-slate-700/80 flex items-center space-x-3 hover:bg-slate-950 transition block">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-file-arrow-down text-base"></i>
+                            </div>
+                            <div class="truncate text-xs">
+                                <p class="font-medium text-slate-200 truncate">${escapeHtml(att.name || 'Документ')}</p>
+                                <p class="text-[10px] text-slate-400">Скачать файл</p>
+                            </div>
+                        </a>
+                    `;
+                } else if (att.type === 'audio') {
+                    blockHtml += `
+                        <div class="flex items-center space-x-2">
+                            <audio controls src="${att.data}" class="max-w-full rounded-lg h-9"></audio>
+                        </div>
+                    `;
+                }
+            });
+            blockHtml += '</div>';
+            return blockHtml;
+        }
+
+        function renderTextWithLinks(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return escapeHtml(text).replace(urlRegex, function(url) {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="underline text-indigo-200 hover:text-white break-all">${url}</a>`;
+            });
+        }
+
+        function handleSendMessage() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+
+            if (!text && pendingAttachmentsList.length === 0) return;
+
+            const newMessage = {
+                id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                userId: userProfile.userId,
+                sender: userProfile.name,
+                emoji: userProfile.emoji || '👤',
+                text: text,
+                attachments: [...pendingAttachmentsList],
+                timestamp: Date.now()
+            };
+
+            currentMessagesList.push(newMessage);
+            try {
+                localStorage.setItem(roomStorageKey, JSON.stringify(currentMessagesList));
+            } catch(e) {}
+            
+            renderMessages();
+
+            if (broadcastChannel) {
+                broadcastChannel.postMessage({ type: 'NEW_MSG' });
+            }
+
+            if (window.firebaseReady && window.firebaseDb) {
+                try {
+                    const messagesRef = window.fbRef(window.firebaseDb, `${roomFirebasePath}/messages`);
+                    const newMsgRef = window.fbPush(messagesRef);
+                    window.fbSet(newMsgRef, newMessage);
+                } catch(err) {
+                    console.warn("Firebase Push error", err);
+                }
+            }
+
+            input.value = '';
+            input.style.height = 'auto';
+            clearAllAttachments();
+        }
+
+        function handleMultipleFilesSelected(event) {
+            const files = Array.from(event.target.files);
+            if (!files || files.length === 0) return;
+
+            if (pendingAttachmentsList.length + files.length > 10) {
+                showCustomToast('Максимум 10 файлов за один раз!');
+                return;
+            }
+
+            files.forEach(file => {
+                if (file.size > 12 * 1024 * 1024) {
+                    showCustomToast(`Файл ${file.name} слишком большой (макс. 12 МБ)`);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const fileData = e.target.result;
+
+                    if (file.type.startsWith('image/')) {
+                        compressImage(fileData, (compressedData) => {
+                            pendingAttachmentsList.push({ id: Date.now() + Math.random(), type: 'image', data: compressedData, name: file.name });
+                            renderAttachmentChips();
+                        });
+                    } else if (file.type.startsWith('video/')) {
+                        pendingAttachmentsList.push({ id: Date.now() + Math.random(), type: 'video', data: fileData, name: file.name });
+                        renderAttachmentChips();
+                    } else {
+                        pendingAttachmentsList.push({ id: Date.now() + Math.random(), type: 'doc', data: fileData, name: file.name });
+                        renderAttachmentChips();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderAttachmentChips() {
+            const container = document.getElementById('attachment-preview-container');
+            const chipsContainer = document.getElementById('attachment-chips-list');
+            const counterBadge = document.getElementById('attachment-count-badge');
+            const fileButtonBadge = document.getElementById('badge-file-counter');
+
+            if (pendingAttachmentsList.length === 0) {
+                container.classList.add('hidden');
+                fileButtonBadge.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            counterBadge.textContent = pendingAttachmentsList.length;
+            fileButtonBadge.textContent = pendingAttachmentsList.length;
+            fileButtonBadge.classList.remove('hidden');
+
+            let html = '';
+            pendingAttachmentsList.forEach((att, index) => {
+                let iconClass = 'fa-file';
+                if (att.type === 'image') iconClass = 'fa-image';
+                if (att.type === 'video') iconClass = 'fa-video';
+
+                html += `
+                    <div class="bg-slate-900 border border-slate-700/70 rounded-xl p-1.5 flex items-center space-x-2 shrink-0 max-w-[140px]">
+                        <i class="fa-solid ${iconClass} text-indigo-400 text-xs"></i>
+                        <span class="text-[10px] text-slate-200 truncate flex-1">${escapeHtml(att.name)}</span>
+                        <button onclick="removeSingleAttachment(${index})" class="text-slate-400 hover:text-red-400 p-0.5">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            chipsContainer.innerHTML = html;
+        }
+
+        function removeSingleAttachment(index) {
+            pendingAttachmentsList.splice(index, 1);
+            renderAttachmentChips();
+        }
+
+        function clearAllAttachments() {
+            pendingAttachmentsList = [];
+            document.getElementById('file-input').value = '';
+            renderAttachmentChips();
+        }
+
+        function compressImage(base64Str, callback) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const maxDim = 800;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxDim) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    }
+                } else {
+                    if (height > maxDim) {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                callback(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = base64Str;
+        }
+
+        async function toggleVoiceRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopAndSendVoiceRecording();
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) audioChunks.push(event.data);
+                };
+
+                mediaRecorder.start();
+                recordingStartTime = Date.now();
+
+                document.getElementById('recording-panel').classList.remove('hidden');
+                recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
+                updateRecordingTimer();
+
+            } catch(err) {
+                showCustomToast('Нет доступа к микрофону');
+            }
+        }
+
+        function updateRecordingTimer() {
+            const elapsedSeconds = Math.floor((Date.now() - recordingStartTime) / 1000);
+            const mins = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+            const secs = String(elapsedSeconds % 60).padStart(2, '0');
+            document.getElementById('recording-timer').textContent = `${mins}:${secs}`;
+        }
+
+        function cancelVoiceRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            clearInterval(recordingTimerInterval);
+            document.getElementById('recording-panel').classList.add('hidden');
+            audioChunks = [];
+        }
+
+        function stopAndSendVoiceRecording() {
+            if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const audioBase64 = reader.result;
+                    
+                    const newMessage = {
+                        id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        userId: userProfile.userId,
+                        sender: userProfile.name,
+                        emoji: userProfile.emoji || '👤',
+                        text: '',
+                        attachments: [{ type: 'audio', data: audioBase64, name: 'Голосовое сообщение' }],
+                        timestamp: Date.now()
+                    };
+
+                    currentMessagesList.push(newMessage);
+                    try { localStorage.setItem(roomStorageKey, JSON.stringify(currentMessagesList)); } catch(e){}
+                    renderMessages();
+
+                    if (window.firebaseReady && window.firebaseDb) {
+                        try {
+                            const messagesRef = window.fbRef(window.firebaseDb, `${roomFirebasePath}/messages`);
+                            const newMsgRef = window.fbPush(messagesRef);
+                            window.fbSet(newMsgRef, newMessage);
+                        } catch(e){}
+                    }
+                };
+                reader.readAsDataURL(audioBlob);
+            };
+
+            cancelVoiceRecording();
+        }
+
+        function openChatInfoModal() {
+            document.getElementById('chat-info-modal').classList.remove('hidden');
+            populateChatInfoTabs();
+        }
+
+        function closeChatInfoModal() {
+            document.getElementById('chat-info-modal').classList.add('hidden');
+        }
+
+        function switchInfoTab(tabId) {
+            document.querySelectorAll('.info-tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.info-tab-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-slate-800', 'text-slate-300');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+                activeBtn.classList.add('bg-indigo-600', 'text-white');
+            }
+        }
+
+        function populateChatInfoTabs() {
+            // Users
+            const usersList = document.getElementById('info-users-list');
+            const users = Object.values(activeUsersMap);
+            let usersHtml = '';
+
+            if (users.length === 0) {
+                usersHtml = `
+                    <div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">${userProfile.emoji || '👤'}</span>
+                            <div>
+                                <p class="text-xs font-bold text-slate-200">${escapeHtml(userProfile.name)} (Вы)</p>
+                                <p class="text-[10px] text-emerald-400">В сети</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                users.forEach(u => {
+                    const isSelf = u.userId === userProfile.userId;
+                    const isOnline = u.online && (Date.now() - u.lastSeen < 35000);
+                    usersHtml += `
+                        <div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-2xl">${u.emoji || '👤'}</span>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-200">${escapeHtml(u.name)}${isSelf ? ' (Вы)' : ''}</p>
+                                    <p class="text-[10px] ${isOnline ? 'text-emerald-400' : 'text-slate-500'}">
+                                        ${isOnline ? '● Онлайн' : '● Был(а) недавно'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            usersList.innerHTML = usersHtml;
+
+            // Extract all attachments from all messages
+            let allAttachments = [];
+            currentMessagesList.forEach(m => {
+                if (m.attachments && Array.isArray(m.attachments)) {
+                    m.attachments.forEach(att => allAttachments.push({ ...att, sender: m.sender, timestamp: m.timestamp }));
+                } else if (m.attachment) {
+                    allAttachments.push({ ...m.attachment, sender: m.sender, timestamp: m.timestamp });
+                }
+            });
+
+            // Photos
+            const photosGrid = document.getElementById('info-photos-grid');
+            const emptyPhotos = document.getElementById('empty-photos');
+            const photos = allAttachments.filter(a => a.type === 'image');
+
+            if (photos.length === 0) {
+                photosGrid.innerHTML = '';
+                emptyPhotos.classList.remove('hidden');
+            } else {
+                emptyPhotos.classList.add('hidden');
+                photosGrid.innerHTML = photos.map(p => `
+                    <div class="aspect-square rounded-xl overflow-hidden bg-slate-900 border border-slate-800">
+                        <img src="${p.data}" onclick="openImageModal('${p.data}')" class="w-full h-full object-cover cursor-pointer hover:opacity-80 transition">
+                    </div>
+                `).join('');
+            }
+
+            // Videos
+            const videosList = document.getElementById('info-videos-list');
+            const emptyVideos = document.getElementById('empty-videos');
+            const videos = allAttachments.filter(a => a.type === 'video');
+
+            if (videos.length === 0) {
+                videosList.innerHTML = '';
+                emptyVideos.classList.remove('hidden');
+            } else {
+                emptyVideos.classList.add('hidden');
+                videosList.innerHTML = videos.map(v => `
+                    <div class="bg-slate-900 border border-slate-800 p-2 rounded-2xl">
+                        <video controls src="${v.data}" class="w-full max-h-48 rounded-xl"></video>
+                        <p class="text-[10px] text-slate-400 mt-1 px-1 font-mono">${escapeHtml(v.sender)} • ${new Date(v.timestamp).toLocaleDateString()}</p>
+                    </div>
+                `).join('');
+            }
+
+            // Documents
+            const docsList = document.getElementById('info-docs-list');
+            const emptyDocs = document.getElementById('empty-docs');
+            const docs = allAttachments.filter(a => a.type === 'doc');
+
+            if (docs.length === 0) {
+                docsList.innerHTML = '';
+                emptyDocs.classList.remove('hidden');
+            } else {
+                emptyDocs.classList.add('hidden');
+                docsList.innerHTML = docs.map(d => `
+                    <a href="${d.data}" download="${d.name || 'document'}" class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center justify-between hover:bg-slate-800 transition block">
+                        <div class="flex items-center space-x-3 truncate">
+                            <i class="fa-solid fa-file-lines text-indigo-400 text-lg"></i>
+                            <div class="truncate">
+                                <p class="text-xs font-medium text-slate-200 truncate">${escapeHtml(d.name || 'Документ')}</p>
+                                <p class="text-[10px] text-slate-500">${escapeHtml(d.sender)}</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-download text-xs text-slate-400"></i>
+                    </a>
+                `).join('');
+            }
+
+            // Audio
+            const audioList = document.getElementById('info-audio-list');
+            const emptyAudio = document.getElementById('empty-audio');
+            const audios = allAttachments.filter(a => a.type === 'audio');
+
+            if (audios.length === 0) {
+                audioList.innerHTML = '';
+                emptyAudio.classList.remove('hidden');
+            } else {
+                emptyAudio.classList.add('hidden');
+                audioList.innerHTML = audios.map(a => `
+                    <div class="bg-slate-900 border border-slate-800 p-2.5 rounded-2xl flex items-center justify-between">
+                        <audio controls src="${a.data}" class="w-full h-8"></audio>
+                    </div>
+                `).join('');
+            }
+
+            // Links
+            const linksList = document.getElementById('info-links-list');
+            const emptyLinks = document.getElementById('empty-links');
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            let extractedLinks = [];
+
+            currentMessagesList.forEach(m => {
+                if (m.text) {
+                    const matches = m.text.match(urlRegex);
+                    if (matches) {
+                        matches.forEach(url => extractedLinks.push({ url, sender: m.sender }));
+                    }
+                }
+            });
+
+            if (extractedLinks.length === 0) {
+                linksList.innerHTML = '';
+                emptyLinks.classList.remove('hidden');
+            } else {
+                emptyLinks.classList.add('hidden');
+                linksList.innerHTML = extractedLinks.map(l => `
+                    <a href="${l.url}" target="_blank" rel="noopener noreferrer" class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex items-center justify-between hover:bg-slate-800 transition block">
+                        <div class="flex items-center space-x-3 truncate">
+                            <i class="fa-solid fa-link text-indigo-400 text-sm"></i>
+                            <span class="text-xs text-indigo-300 underline truncate">${escapeHtml(l.url)}</span>
+                        </div>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-500"></i>
+                    </a>
+                `).join('');
+            }
+        }
+
+        function openShareModal() {
+            if (!currentRoomId) return;
+            const originUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${originUrl}#${encodeURIComponent(currentRoomId)}`;
+
+            document.getElementById('share-room-name-badge').textContent = `"#${currentRoomId}"`;
+            document.getElementById('share-link-input').value = shareUrl;
+            document.getElementById('share-modal').classList.remove('hidden');
+        }
+
+        function closeShareModal() {
+            document.getElementById('share-modal').classList.add('hidden');
+        }
+
+        function copyShareLink() {
+            const copyInput = document.getElementById('share-link-input');
+            copyInput.select();
+            try {
+                document.execCommand('copy');
+                showCustomToast('Ссылка скопирована!');
+            } catch (err) {
+                showCustomToast('Ошибка копирования');
+            }
+        }
+
+        async function triggerNativeShare() {
+            const shareUrl = document.getElementById('share-link-input').value;
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Приватный чат',
+                        text: `Подключайся к чату в комнате #${currentRoomId}!`,
+                        url: shareUrl
+                    });
+                } catch (err) {}
+            } else {
+                copyShareLink();
+            }
+        }
+
+        function openImageModal(src) {
+            document.getElementById('full-modal-image').src = src;
+            document.getElementById('image-modal').classList.remove('hidden');
+        }
+
+        function closeImageModal() {
+            document.getElementById('image-modal').classList.add('hidden');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function showCustomToast(text) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 bg-slate-800 text-indigo-300 text-xs px-4 py-2 rounded-xl border border-indigo-500/30 shadow-xl z-50 animate-bounce font-medium';
+            toast.textContent = text;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        const messageInput = document.getElementById('message-input');
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
